@@ -1,0 +1,4 @@
+[x] 1. write the load_store tokenizer
+[x] 2. support negative values in the to_binary function (convert to 2's complement)
+3. all the bubble sort instructions/test against that
+4. labels
