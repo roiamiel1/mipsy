@@ -55,10 +55,17 @@ class AssemblerTest(unittest.TestCase):
 
     def test_add(self):
         self.run_test('add $t0, $t1, $t2', '00000001001010100100000000100000')
+        self.run_test('add $s0, $s1, $s2', '00000010001100101000000000100000')
 
     def test_addi(self):
         self.run_test('addi $s2, $s3, 4', '00100010011100100000000000000100')
         self.run_test('addi $s0, $s0, -20', '00100010000100001111111111101100')
+
+    def test_j(self):
+        self.run_test('j 4', '00001000000000000000000000000100')
+
+    def test_jr(self):
+        self.run_test('jr $ra', '00000011111000000000000000001000')
 
     def test_lw(self):
         self.run_test('lw $a0, 4($zero)', '10001100000001000000000000000100')

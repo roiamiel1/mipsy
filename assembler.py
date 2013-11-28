@@ -113,31 +113,34 @@ class MIPS(object):
             return self.encoding.format(**(self.encoding_map))
 
     class R_Instruction(Instruction):
-        encoding = '{opcode}{rs}{rt}{rd}{shamt}{funct}'
-        encoding_map = {
-            'opcode': '000000',
-            'rs': '00000',
-            'rt': '00000',
-            'rd': '00000',
-            'shamt': '00000',
-            'funct': '000000',
-        }
+        def __init__(self):
+            self.encoding = '{opcode}{rs}{rt}{rd}{shamt}{funct}'
+            self.encoding_map = {
+                'opcode': '000000',
+                'rs': '00000',
+                'rt': '00000',
+                'rd': '00000',
+                'shamt': '00000',
+                'funct': '000000',
+            }
 
     class I_Instruction(Instruction):
-        encoding = '{opcode}{rs}{rt}{imm}'
-        encoding_map = {
-            'opcode': '000000',
-            'rs': '00000',
-            'rt': '00000',
-            'imm': '0000000000000000',
-        }
+        def __init__(self):
+            self.encoding = '{opcode}{rs}{rt}{imm}'
+            self.encoding_map = {
+                'opcode': '000000',
+                'rs': '00000',
+                'rt': '00000',
+                'imm': '0000000000000000',
+            }
 
     class J_Instruction(Instruction):
-        encoding = '{opcode}{address}'
-        encoding_map = {
-            'opcode': '000000',
-            'address': '00000000000000000000000000',
-        }
+        def __init__(self):
+            self.encoding = '{opcode}{addr}'
+            self.encoding_map = {
+                'opcode': '000000',
+                'addr': '00000000000000000000000000',
+            }
 
     def generate_instruction(self, instruction_format):
         instruction = None
@@ -185,6 +188,14 @@ class MIPSAssembler(object):
             to_split = instruction_data.replace(',', ' ')
             return self.map_operands(to_split, operands)
 
+        def J_type(self, operands, instruction_data):
+            """
+            The J_type tokenizer takes jump (j, jal) instructions
+            with the format:
+            (operation) [operand]
+            """
+            return self.map_operands(instruction_data, operands)
+
         def load_store(self, operands, instruction_data):
             """
             The load_store tokenizer takes instructions with the format:
@@ -213,7 +224,10 @@ class MIPSAssembler(object):
         'addi'  : ParseInfo(['rt', 'rs', 'imm'], t.RI_type),
         'and'   : ParseInfo(['rd', 'rs', 'rt'],  t.RI_type),
         'beq'   : ParseInfo(['rs', 'rt', 'imm'], t.RI_type),
-        'lw'    : ParseInfo(['rt', 'imm', 'rs'], t.load_store)
+        'j'     : ParseInfo(['addr'],            t.J_type),
+        'jal'   : ParseInfo(['addr'],            t.J_type),
+        'jr'    : ParseInfo(['rs'],              t.RI_type),
+        'lw'    : ParseInfo(['rt', 'imm', 'rs'], t.load_store),
         # TODO ...
     }
 
