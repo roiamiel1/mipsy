@@ -228,6 +228,11 @@ class MIPSAssembler(object):
         'jal'   : ParseInfo(['addr'],            t.J_type),
         'jr'    : ParseInfo(['rs'],              t.RI_type),
         'lw'    : ParseInfo(['rt', 'imm', 'rs'], t.load_store),
+        'or'    : ParseInfo(['rd', 'rs', 'rt'],  t.RI_type),
+        'slt'   : ParseInfo(['rd', 'rs', 'rt'],  t.RI_type),
+        'sll'   : ParseInfo(['rd', 'rt', 'shamt'], t.RI_type),
+        'sw'    : ParseInfo(['rt', 'imm', 'rs'], t.load_store),
+        'sub'   : ParseInfo(['rd', 'rs', 'rt'],  t.RI_type),
         # TODO ...
     }
 
@@ -281,7 +286,7 @@ class MIPSAssembler(object):
                 encoding_map[operand] = convert(int(value), MIPS.ADDRESS_SIZE)
 
             elif (operand == 'shamt'):
-                encoding_map[operand] = convert(int(value), MIP.SHAMT_SIZE)
+                encoding_map[operand] = convert(int(value), MIPS.SHAMT_SIZE)
 
             else:
                 raise RuntimeError('invalid operand name: {}'.format(operand))

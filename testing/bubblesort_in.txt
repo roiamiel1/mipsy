@@ -13,7 +13,7 @@ addi $v0, $zero, 1
 jr $ra
 addi $v0, $zero, 0
 jr $ra
-addi $sp,$sp, –20
+addi $sp, $sp, -20
 sw $ra, 16($sp)
 sw $s3, 12($sp)
 sw $s2, 8($sp)
