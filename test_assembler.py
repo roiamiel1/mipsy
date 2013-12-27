@@ -59,7 +59,68 @@ class BubblesortTest(unittest.TestCase):
                 self.fail('instr: {} output encoding: {} != master encoding: {}'.format(i, output[i], master[i])) 
 
         self.assertTrue(True)
-        
+
+
+class LabelCacheTests(unittest.TestCase):
+    """
+    Tests basic functionality of the label cache.
+    """
+    cache = assembler.LabelCache()
+
+    def setUp(self):
+        self.cache.empty()
+
+    def test_write(self):
+        self.cache.write('sort', 20)
+        self.cache.write('L1', 16)
+
+        self.assertTrue('sort' in self.cache.cache)
+        self.assertTrue('L1' in self.cache.cache)
+
+        self.assertEqual(20, self.cache.cache['sort'])
+        self.assertEqual(16, self.cache.cache['L1'])
+
+    def test_write_conflict(self):
+        self.cache.write('sort', 20)
+        self.assertRaises(RuntimeError, self.cache.write, *['sort', 50])
+
+    def test_miss(self):
+        hit, index = self.cache.query('sort')
+        self.assertFalse(hit)
+        self.assertEqual(0, index)
+
+    def test_hit(self):
+        self.cache.write('sort', 20)
+        self.cache.write('L1', 16)
+
+        hit, index = self.cache.query('sort')
+        self.assertTrue(hit)
+        self.assertEqual(20, index)
+
+        hit, index = self.cache.query('L1')
+        self.assertTrue(hit)
+        self.assertEqual(16, index)
+
+    def test_data(self):
+        """ Ensure data is consistant across instances. """
+        # write in c1, read in c2
+        c1 = assembler.LabelCache()
+        c1.write('sort', 20)
+
+        c2 = assembler.LabelCache()
+        hit, index = c2.query('sort')
+        self.assertTrue(hit)
+        self.assertEqual(20, index)
+
+        # write in c2, read in c1
+        c2.write('L1', 50)
+        hit, index = c1.query('L1')
+        self.assertTrue(hit)
+        self.assertEqual(50, index)
+
+        self.assertDictEqual(c1.cache, c2.cache)
+        self.assertDictEqual(c1.cache, self.cache.cache)
+
 
 class EncoderTests(unittest.TestCase):
     """
