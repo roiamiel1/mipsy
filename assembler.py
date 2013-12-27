@@ -190,7 +190,7 @@ class MIPSAssembler(object):
 
         def J_type(self, operands, instruction_data):
             """
-            The J_type tokenizer takes jump (j, jal) instructions
+            The J_type tokenizer takes jump (j, jal, jr) instructions
             with the format:
             (operation) [operand]
             """
@@ -288,8 +288,7 @@ class MIPSAssembler(object):
             elif (operand == 'shamt'):
                 encoding_map[operand] = convert(int(value), MIPS.SHAMT_SIZE)
 
-            else:
-                raise RuntimeError('invalid operand name: {}'.format(operand))
+            else: pass
 
     @staticmethod
     def to_binary(decimal, length):
