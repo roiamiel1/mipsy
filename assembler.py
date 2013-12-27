@@ -324,7 +324,7 @@ class MIPSAssembler(object):
         encoder = Encoder()
         in_content = []
 
-        with open(args.in_path) as f:
+        with open(self.args.in_path) as f:
             in_content = f.readlines()
             f.close()
 
@@ -334,8 +334,13 @@ class MIPSAssembler(object):
             to_encode.append(line.replace('\n', ''))
 
         # Encode and write instructions
-        out = open(args.out_path, 'w')
+        out = open(self.args.out_path, 'w')
         for instruction in to_encode:
             out.write(encoder.encode_instruction(instruction) + '\n')
 
         out.close()
+
+
+if __name__ == '__main__':
+    assembler = MIPSAssembler()
+    assembler.run()
