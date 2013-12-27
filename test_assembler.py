@@ -61,21 +61,21 @@ class BubblesortTest(unittest.TestCase):
         self.assertTrue(True)
         
 
-class InstructionTests(unittest.TestCase):
+class EncoderTests(unittest.TestCase):
     """
     Expected results come from the mipshelper.com instruction converter.
     (Please, let me know if there is a better source.)
     """
 
     error_message = 'encode value: {} for instruction: {} does not match expected: {}'
-    assembler = assembler.MIPSAssembler()
+    encoder = assembler.Encoder()
 
     def run_test(self, instr, expected):
         """
         Encodes the given instruction string and cross-references the output
         with the expected bit string.
         """
-        result = self.assembler.encode_instruction(instr)
+        result = self.encoder.encode_instruction(instr)
         self.assertEqual(expected, result, msg=self.error_message.format(result, instr, expected))
 
     def test_nop(self):

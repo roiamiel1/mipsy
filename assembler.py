@@ -154,7 +154,10 @@ class MIPS(object):
         return instruction
 
 
-class MIPSAssembler(object):
+class Encoder(object):
+    """
+    Responsible for encoding individual instructions and querying the label cache.
+    """
 
     class tokenizer(object):
         """
@@ -273,7 +276,7 @@ class MIPSAssembler(object):
         Converts generic register references (such as $t0, $t1, etc), immediate values, and jump addresses
         to their binary equivalents.
         """
-        convert = MIPSAssembler.to_binary
+        convert = Encoder.to_binary
 
         for operand, value in encoding_map.iteritems():
             if (operand == 'rs' or operand == 'rt' or operand == 'rd'):
@@ -301,32 +304,38 @@ class MIPSAssembler(object):
         return b.bin
 
 
-if __name__ == '__main__':
+class MIPSAssembler(object):
+    """
+    Responsible for file I/O and building the final instruction memory.
+    Relies on the Encoder to build individual instruction bit strings.
+    """
 
-    # Initialize and load command line args
-    argparser = argparse.ArgumentParser(description='(Extremely) basic MIPS32 assembler.')
+    def __init__(self):
+        # Initialize and load command line args
+        argparser = argparse.ArgumentParser(description='(Extremely) basic MIPS32 assembler.')
 
-    argparser.add_argument('in_path')
-    argparser.add_argument('-o', dest='out_path', default='out.bin')
+        argparser.add_argument('in_path')
+        argparser.add_argument('-o', dest='out_path', default='out.bin')
 
-    args = argparser.parse_args()
+        self.args = argparser.parse_args()
 
-    # Initialize
-    assembler = MIPSAssembler()
-    in_content = []
+    def run(self):
+        # Initialize
+        encoder = Encoder()
+        in_content = []
 
-    with open(args.in_path) as f:
-        in_content = f.readlines()
-        f.close()
+        with open(args.in_path) as f:
+            in_content = f.readlines()
+            f.close()
 
-    # Preprocess input (strip out newlines)
-    to_encode = []
-    for line in in_content:
-        to_encode.append(line.replace('\n', ''))
+        # Preprocess input (strip out newlines)
+        to_encode = []
+        for line in in_content:
+            to_encode.append(line.replace('\n', ''))
 
-    # Encode and write instructions
-    out = open(args.out_path, 'w')
-    for instruction in to_encode:
-        out.write(assembler.encode_instruction(instruction) + '\n')
+        # Encode and write instructions
+        out = open(args.out_path, 'w')
+        for instruction in to_encode:
+            out.write(encoder.encode_instruction(instruction) + '\n')
 
-    out.close()
+        out.close()
