@@ -32,8 +32,11 @@ __version__ = '0.0.1'
 
 from lib import bitstring
 
+import re
 import argparse
 import logging
+
+logging.root.setLevel(logging.DEBUG)
 
 
 class OpInfo(object):
@@ -367,28 +370,100 @@ class MIPSAssembler(object):
 
         self.args = argparser.parse_args()
 
+        # List of encoded instructions and their index (PC)
+        self.instructions = []
+        self.pc = 0
+
+        # Label cache and record of instructions that need resolution.
+        # If the label present in the instruction is not in the label cache
+        # (i.e. cannot be encoded) we write to the instruction list and store
+        # a reference back to later resolve those labels when they become available.
+        self.label_cache = LabelCache()
+
+        # label --> [list of instruction indices using label]
+        # Entry is cleared when label address becomes available.
+        self.resolve = {}
+
+        # Instruction encoder
+        self.encoder = Encoder()
+
     def run(self):
-        # Initialize
-        encoder = Encoder()
-        in_content = []
+        # Regular expressions to match input against
+        # If no match is made with these, we assume the current input line
+        # is an instruction and attempt to parse as such
+        regex = {
+            'label': re.compile(r'[\w]+[ ]*:[ ]*[\r\n]+'),
+            'label_instruction': re.compile(r'[\w]+[ ]*:[ ]*.+[\r\n]+')
+        }
 
         with open(self.args.in_path) as f:
-            in_content = f.readlines()
+            file_content = f.readlines()
             f.close()
 
-        # Preprocess input (strip out newlines)
-        to_encode = []
-        for line in in_content:
-            to_encode.append(line.replace('\n', ''))
+        # strip surrounding whitespace and match against regex
+        for line in file_content:
+            # Skip empty lines
+            if line != '\n':
+                if regex['label'].match(line):
+                    # Hold PC constant on a label only line
+                    self.process_label(line.strip())
 
-        # Encode and write instructions
+                elif regex['label_instruction'].match(line):
+                    self.process_label_instruction(line.strip())
+                    self.pc += 1
+
+                else:
+                    self.process_instruction(line.strip())
+                    self.pc += 1
+
+    def process_label(self, line):
+        """ Update label cache and keep instruction count constant. """
+        logging.debug('found label: {}'.format(line))
+        self.label_cache.write(line.replace(':', ''), self.pc)
+
+    def process_label_instruction(self, line):
+        """ Update label cache, pass instruction to encoder, increment instruction count. """
+        logging.debug('found label-instruction combination: {}'.format(line))
+        tokens = line.split(':')
+        self.label_cache.write(tokens[0].strip(), self.pc)
+        self.process_instruction(tokens[1].strip())
+
+    def process_instruction(self, instr):
+        """ Attempt to parse as an instruction using the encoder and save to the master instruction list. """
+        # encoded, label, bitstring = self.encoder.encode_instruction(self.pc, instr)
+        logging.debug('processing instruction: {}'.format(instr))
+        self.instructions.append(instr)
+
+    def write(self):
+        # Check for unresolved instructions
+        if self.resolve.keys():
+            raise RuntimeError('Error: unresolved labels\n{}'.format(self.label_error()))
+
+        # Write instruction memory to file
+        # TODO: this can be customized using an output "formatter"
         out = open(self.args.out_path, 'w')
-        for instruction in to_encode:
-            out.write(encoder.encode_instruction(instruction) + '\n')
+        for instruction in self.instructions:
+            out.write('{}\n'.format(instruction))
 
         out.close()
+
+    def label_error(self):
+        """
+        Helper method. Pretty prints label resolution error. (No label found)
+        Format: "unresolved reference to 'label': instruction"
+        """
+        message = []
+        for key, value in self.resolve.iteritems():
+            message.append('\tunresolved reference to \'{}\': {}\n'.format(key, value[0]))
+
+        return ''.join(message)
 
 
 if __name__ == '__main__':
     assembler = MIPSAssembler()
-    assembler.run()
+
+    try:
+        assembler.run()
+        # assembler.write()
+    except Exception, e:
+        print e.message
