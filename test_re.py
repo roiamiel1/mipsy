@@ -39,50 +39,61 @@ class RegularExpressionTests(unittest.TestCase):
     (Please, let me know if there is a better source.)
     """
 
-    # Label followed by instruction
-    # e.g. 'sort: addi $s0, $s0, -20'
-    label_instruction = r'[\w]+[ ]*:[ ]*.+[\r\n]+'
-
-    # Label on separate line
-    # e.g. 'sort:'
-    label = r'[\w]+[ ]*:[ ]*[\r\n]+'
-
-    # Instruction
-    # TODO, may need RE for each instruction format? (R, I, J)
-    instr = r''
+    label_test = r'(?P<label>[\w]+)[ ]*:[ ]*(?P<instruction>.*)'
+    label_test_regex = re.compile(label_test, re.IGNORECASE)
 
     def run_test(self, r, test_string):
         """ Assert a match with the test string on the given (compiled) regular expression object. """
-        self.assertIsNotNone(r.match(test_string),
+        match = r.match(test_string)
+        self.assertIsNotNone(match,
             msg='given string: \"{}\" did not match RE: {}'.format(test_string, r.pattern))
+        return match
 
     def run_test_negative(self, r, test_string):
         """ Assert a non-match with the test string on the given (compiled) regular expression object. """
-        self.assertIsNone(r.match(test_string),
+        match = r.match(test_string)
+        self.assertIsNone(match,
             msg='given string: \"{}\" did match RE: {}'.format(test_string, r.pattern))
+        return match
 
-    def test_label_instr(self):
-        r = re.compile(self.label_instruction, re.IGNORECASE)
+    def test_label_match(self):
+        label = 'sort'
+        instruction = 'addi $s0, $s0, -20'
+        r = self.label_test_regex
 
-        self.run_test(r, 'sort:addi $s0, $s0, $s0, -20\n')
-        self.run_test(r, 'sort:  addi $s0, $s0, -20\n')
-        self.run_test(r, 'sort  :addi $s0, $s0, -20\n')
-        self.run_test(r, 'sort  :  addi $s0, $s0, -20\n')
+        match = self.run_test(r, 'sort:addi $s0, $s0, -20')
+        self.assertEqual(label, match.group('label'))
+        self.assertEqual(instruction, match.group('instruction'))
 
-        self.run_test_negative(r, 'sort addi $s0, $s0, -20\n')
-        self.run_test_negative(r, 'sort, addi $s0, $s0, -20\n')
-        self.run_test_negative(r, 'sort:\n')
+        match = self.run_test(r, 'sort:  addi $s0, $s0, -20')
+        self.assertEqual(label, match.group('label'))
+        self.assertEqual(instruction, match.group('instruction'))
 
-    def test_label(self):
-        r = re.compile(self.label, re.IGNORECASE)
+        match = self.run_test(r, 'sort  :addi $s0, $s0, -20')
+        self.assertEqual(label, match.group('label'))
+        self.assertEqual(instruction, match.group('instruction'))
 
-        self.run_test(r, 'sort:\n')
-        self.run_test(r, 'sort   :\n')
-        self.run_test(r, 'sort:   \n')
-        self.run_test(r, 'sort   :   \n')
+        match = self.run_test(r, 'sort  :  addi $s0, $s0, -20')
+        self.assertEqual(label, match.group('label'))
+        self.assertEqual(instruction, match.group('instruction'))
 
-        self.run_test_negative(r, 'sort\n')
-        self.run_test_negative(r, 'sort   \n')
-        self.run_test_negative(r, ':sort:\n')
-        self.run_test_negative(r, ' : sort:\n')
+        match = self.run_test(r, 'sort:')
+        self.assertEqual(label, match.group('label'))
+        self.assertEqual('', match.group('instruction'))
+
+        match = self.run_test(r, 'sort : ')
+        self.assertEqual(label, match.group('label'))
+        self.assertEqual('', match.group('instruction'))
+
+    def test_label_non_match(self):
+        label = 'sort'
+        instruction = 'addi $s0, $s0 -20'
+        r = self.label_test_regex
+
+        self.run_test_negative(r, 'sort')
+        self.run_test_negative(r, 'sort   ')
+        self.run_test_negative(r, ':sort:')
+        self.run_test_negative(r, ' : sort:')
+        self.run_test_negative(r, 'addi $s0, $s0, -20')
+        self.run_test_negative(r, 'sort addi $s0, $s0, -20')
 

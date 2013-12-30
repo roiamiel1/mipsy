@@ -419,7 +419,7 @@ class MIPSAssembler(object):
     def process_label(self, line):
         """ Update label cache and keep instruction count constant. """
         logging.debug('found label: {}'.format(line))
-        self.label_cache.write(line.replace(':', ''), self.pc)
+        self.label_cache.write(line.replace(':', '').strip(), self.pc)
 
     def process_label_instruction(self, line):
         """ Update label cache, pass instruction to encoder, increment instruction count. """
