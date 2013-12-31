@@ -33,21 +33,17 @@ import unittest
 import assembler
 
 
-class BubblesortTest(unittest.TestCase):
+class ProgramTests(unittest.TestCase):
     """
-    Tests assembler output against a known working bubblesort
-    for a VHDL MIPS implementation.
+    Tests assembler output against full program input.
+    Need a valid (master) file to compare against.
     """
-    def test_output(self):
-        """
-        NOTE: Assembler must first be run on the input file
-        before this test can be run.
-        """
-        with open('testing/bubblesort_out_master.txt') as f:
+    def run_test(self, in_path, master_path):
+        with open(master_path) as f:
             master = f.readlines()
             f.close()
 
-        with open('testing/bubblesort_out.txt') as f:
+        with open(in_path) as f:
             output = f.readlines()
             f.close()
 
@@ -59,23 +55,93 @@ class BubblesortTest(unittest.TestCase):
                 self.fail('instr: {} output encoding: {} != master encoding: {}'.format(i, output[i], master[i])) 
 
         self.assertTrue(True)
-        
 
-class InstructionTests(unittest.TestCase):
+    def test_bubblesort_no_labels(self):
+        """
+        Tests against a bubblesort program that works for a VHDL MIPS32 implementation.
+        """
+        self.run_test('testing/bubblesort_out.txt', 'testing/bubblesort_out_master.txt')
+
+    def test_bubblesort_labels(self):
+        self.run_test('testing/bubblesort_labels_out.txt', 'testing/bubblesort_out_master.txt')
+
+
+class LabelCacheTests(unittest.TestCase):
+    """
+    Tests basic functionality of the label cache.
+    """
+    cache = assembler.LabelCache()
+
+    def setUp(self):
+        self.cache.empty()
+
+    def test_write(self):
+        self.cache.write('sort', 20)
+        self.cache.write('L1', 16)
+
+        self.assertTrue('sort' in self.cache.cache)
+        self.assertTrue('L1' in self.cache.cache)
+
+        self.assertEqual(20, self.cache.cache['sort'])
+        self.assertEqual(16, self.cache.cache['L1'])
+
+    def test_write_conflict(self):
+        self.cache.write('sort', 20)
+        self.assertRaises(RuntimeError, self.cache.write, *['sort', 50])
+
+    def test_miss(self):
+        hit, index = self.cache.query('sort')
+        self.assertFalse(hit)
+        self.assertEqual(0, index)
+
+    def test_hit(self):
+        self.cache.write('sort', 20)
+        self.cache.write('L1', 16)
+
+        hit, index = self.cache.query('sort')
+        self.assertTrue(hit)
+        self.assertEqual(20, index)
+
+        hit, index = self.cache.query('L1')
+        self.assertTrue(hit)
+        self.assertEqual(16, index)
+
+    def test_data(self):
+        """ Ensure data is consistant across instances. """
+        # write in c1, read in c2
+        c1 = assembler.LabelCache()
+        c1.write('sort', 20)
+
+        c2 = assembler.LabelCache()
+        hit, index = c2.query('sort')
+        self.assertTrue(hit)
+        self.assertEqual(20, index)
+
+        # write in c2, read in c1
+        c2.write('L1', 50)
+        hit, index = c1.query('L1')
+        self.assertTrue(hit)
+        self.assertEqual(50, index)
+
+        self.assertDictEqual(c1.cache, c2.cache)
+        self.assertDictEqual(c1.cache, self.cache.cache)
+
+
+class EncoderTests(unittest.TestCase):
     """
     Expected results come from the mipshelper.com instruction converter.
     (Please, let me know if there is a better source.)
     """
 
     error_message = 'encode value: {} for instruction: {} does not match expected: {}'
-    assembler = assembler.MIPSAssembler()
+    encoder = assembler.Encoder()
 
-    def run_test(self, instr, expected):
+    def run_test(self, instr, expected, pc=0):
         """
         Encodes the given instruction string and cross-references the output
         with the expected bit string.
         """
-        result = self.assembler.encode_instruction(instr)
+        result = self.encoder.encode_instruction(pc, instr)
         self.assertEqual(expected, result, msg=self.error_message.format(result, instr, expected))
 
     def test_nop(self):
@@ -93,13 +159,16 @@ class InstructionTests(unittest.TestCase):
         self.run_test('and $s3, $t2, $t4', '00000001010011001001100000100100')
 
     def test_beq(self):
-        self.run_test('beq $t0, $t1, 30', '00010001000010010000000000011110')
+        self.encoder.label_cache.write('else', 20)
+        self.run_test('beq $t0, $t1, else', '00010001000010010000000000001001', pc=10)
 
     def test_j(self):
-        self.run_test('j 4', '00001000000000000000000000000100')
+        self.encoder.label_cache.write('sort', 4)
+        self.run_test('j sort', '00001000000000000000000000000100')
 
     def test_jal(self):
-        self.run_test('jal 12', '00001100000000000000000000001100')
+        self.encoder.label_cache.write('L1', 12)
+        self.run_test('jal L1', '00001100000000000000000000001100')
 
     def test_jr(self):
         self.run_test('jr $ra', '00000011111000000000000000001000')
