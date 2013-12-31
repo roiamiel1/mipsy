@@ -33,21 +33,17 @@ import unittest
 import assembler
 
 
-class BubblesortTest(unittest.TestCase):
+class ProgramTests(unittest.TestCase):
     """
-    Tests assembler output against a known working bubblesort
-    for a VHDL MIPS implementation.
+    Tests assembler output against full program input.
+    Need a valid (master) file to compare against.
     """
-    def test_output(self):
-        """
-        NOTE: Assembler must first be run on the input file
-        before this test can be run.
-        """
-        with open('testing/bubblesort_out_master.txt') as f:
+    def run_test(self, in_path, master_path):
+        with open(master_path) as f:
             master = f.readlines()
             f.close()
 
-        with open('testing/bubblesort_out.txt') as f:
+        with open(in_path) as f:
             output = f.readlines()
             f.close()
 
@@ -59,6 +55,15 @@ class BubblesortTest(unittest.TestCase):
                 self.fail('instr: {} output encoding: {} != master encoding: {}'.format(i, output[i], master[i])) 
 
         self.assertTrue(True)
+
+    def test_bubblesort_no_labels(self):
+        """
+        Tests against a bubblesort program that works for a VHDL MIPS32 implementation.
+        """
+        self.run_test('testing/bubblesort_out.txt', 'testing/bubblesort_out_master.txt')
+
+    def test_bubblesort_labels(self):
+        self.run_test('testing/bubblesort_labels_out.txt', 'testing/bubblesort_out_master.txt')
 
 
 class LabelCacheTests(unittest.TestCase):
@@ -131,12 +136,12 @@ class EncoderTests(unittest.TestCase):
     error_message = 'encode value: {} for instruction: {} does not match expected: {}'
     encoder = assembler.Encoder()
 
-    def run_test(self, instr, expected):
+    def run_test(self, instr, expected, pc=0):
         """
         Encodes the given instruction string and cross-references the output
         with the expected bit string.
         """
-        result = self.encoder.encode_instruction(instr)
+        result = self.encoder.encode_instruction(pc, instr)
         self.assertEqual(expected, result, msg=self.error_message.format(result, instr, expected))
 
     def test_nop(self):
@@ -154,13 +159,16 @@ class EncoderTests(unittest.TestCase):
         self.run_test('and $s3, $t2, $t4', '00000001010011001001100000100100')
 
     def test_beq(self):
-        self.run_test('beq $t0, $t1, 30', '00010001000010010000000000011110')
+        self.encoder.label_cache.write('else', 20)
+        self.run_test('beq $t0, $t1, else', '00010001000010010000000000001001', pc=10)
 
     def test_j(self):
-        self.run_test('j 4', '00001000000000000000000000000100')
+        self.encoder.label_cache.write('sort', 4)
+        self.run_test('j sort', '00001000000000000000000000000100')
 
     def test_jal(self):
-        self.run_test('jal 12', '00001100000000000000000000001100')
+        self.encoder.label_cache.write('L1', 12)
+        self.run_test('jal L1', '00001100000000000000000000001100')
 
     def test_jr(self):
         self.run_test('jr $ra', '00000011111000000000000000001000')

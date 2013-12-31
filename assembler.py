@@ -36,8 +36,6 @@ import re
 import argparse
 import logging
 
-logging.root.setLevel(logging.DEBUG)
-
 
 class OpInfo(object):
     """
@@ -269,17 +267,15 @@ class Encoder(object):
     # for a given instruction. The parsing rules are used to
     # map tokens in the instruction string to register address
     # and immediate value positions. (rs, rt, rd, etc)
-
     t = tokenizer()
-
     operations = {
         'nop'   : ParseInfo(['rd', 'rs', 'rt'],  t.nop),
         'add'   : ParseInfo(['rd', 'rs', 'rt'],  t.RI_type),
         'addi'  : ParseInfo(['rt', 'rs', 'imm'], t.RI_type),
         'and'   : ParseInfo(['rd', 'rs', 'rt'],  t.RI_type),
-        'beq'   : ParseInfo(['rs', 'rt', 'imm'], t.RI_type),
-        'j'     : ParseInfo(['addr'],            t.J_type),
-        'jal'   : ParseInfo(['addr'],            t.J_type),
+        'beq'   : ParseInfo(['rs', 'rt', 'label'], t.RI_type),
+        'j'     : ParseInfo(['label'],            t.J_type),
+        'jal'   : ParseInfo(['label'],            t.J_type),
         'jr'    : ParseInfo(['rs'],              t.RI_type),
         'lw'    : ParseInfo(['rt', 'imm', 'rs'], t.load_store),
         'or'    : ParseInfo(['rd', 'rs', 'rt'],  t.RI_type),
@@ -291,15 +287,24 @@ class Encoder(object):
     }
 
     def __init__(self):
+        # ISA definitions
         self.mips = MIPS()
 
-    def encode_instruction(self, instr):
+        # Label resolution cache
+        self.label_cache = LabelCache()
+
+    def encode_instruction(self, pc, instr):
         """
         Given an instruction string, generate the encoded bit string.
+        PC (instruction index is used for branch label resolution)
         """
         data = instr.split()
         operation = data[0]
-        mips_op_info = MIPS.operations[operation]
+
+        try:
+            mips_op_info = MIPS.operations[operation]
+        except KeyError, e:
+            raise RuntimeError('Unknown operation: {}'.format(operation))
 
         # Grab the parsing info from the assembler operations table
         # Generate the initial operand map using the specified tokenizer
@@ -307,7 +312,7 @@ class Encoder(object):
         encoding_map = parse_info.tokenizer(parse_info.tokens, ''.join(data[1:]))
 
         # Get the binary equivalents of the operands and MIPS operation information
-        self.resolve_operands(encoding_map)
+        self.resolve_operands(encoding_map, operation, pc)
 
         # Pull MIPS operation info into encoding map
         self.resolve_operation_info(encoding_map, mips_op_info)
@@ -322,12 +327,14 @@ class Encoder(object):
         encoding_map['opcode'] = mips_op_info.opcode
         encoding_map['funct'] = mips_op_info.funct
 
-    def resolve_operands(self, encoding_map):
+    def resolve_operands(self, encoding_map, operation, pc):
         """
         Converts generic register references (such as $t0, $t1, etc), immediate values, and jump addresses
         to their binary equivalents.
         """
         convert = Encoder.to_binary
+        branch_replace = False
+        jump_replace = False
 
         for operand, value in encoding_map.iteritems():
             if (operand == 'rs' or operand == 'rt' or operand == 'rd'):
@@ -342,7 +349,39 @@ class Encoder(object):
             elif (operand == 'shamt'):
                 encoding_map[operand] = convert(int(value), MIPS.SHAMT_SIZE)
 
-            else: pass
+            elif (operand == 'label'):
+                label = encoding_map[operand]
+                hit, index = self.label_cache.query(label)
+
+                if not hit:
+                    raise RuntimeError('No address found for label: {}'.format(label))
+
+                if ((operation == 'beq') or (operation == 'bne')):
+                    # Calculate the relative instruction offset. The MIPS ISA uses
+                    # PC + 4 + (branch offset) to resolve branch targets.
+                    if index > pc:
+                        encoding_map[operand] = convert(index - pc - 1, MIPS.IMMEDIATE_SIZE)
+                    elif index < pc:
+                        encoding_map[operand] = convert((pc + 1) - index, MIPS.IMMEDIATE_SIZE)
+                    else:
+                        # Not sure why a branch would resolve to itself, but ok
+                        # (PC + 4) - 4 = 
+                        encoding_map[operand] = convert(-1, MIPS.IMMEDIATE_SIZE)
+
+                    branch_replace = True
+
+                elif ((operation == 'j') or (operation == 'jal')):
+                    # Jump addresses are absolute
+                    encoding_map[operand] = convert(index, MIPS.ADDRESS_SIZE)
+                    jump_replace = True
+
+        # Need to convert references to 'label' back to references the instruction
+        # encoding string recognizes, otherwise we end up with the default value (zero)
+        # This doesn't feel very clean, but working on a fix.
+        if branch_replace:
+            encoding_map['imm'] = encoding_map['label']
+        elif jump_replace:
+            encoding_map['addr'] = encoding_map['label']
 
     @staticmethod
     def to_binary(decimal, length):
@@ -374,27 +413,20 @@ class MIPSAssembler(object):
         self.instructions = []
         self.pc = 0
 
-        # Label cache and record of instructions that need resolution.
-        # If the label present in the instruction is not in the label cache
-        # (i.e. cannot be encoded) we write to the instruction list and store
-        # a reference back to later resolve those labels when they become available.
+        # Label cache
+        # label --> instruction index (PC)
         self.label_cache = LabelCache()
-
-        # label --> [list of instruction indices using label]
-        # Entry is cleared when label address becomes available.
-        self.resolve = {}
 
         # Instruction encoder
         self.encoder = Encoder()
 
     def run(self):
-        # Regular expressions to match input against
-        # If no match is made with these, we assume the current input line
-        # is an instruction and attempt to parse as such
-        regex = {
-            'label': re.compile(r'[\w]+[ ]*:[ ]*[\r\n]+'),
-            'label_instruction': re.compile(r'[\w]+[ ]*:[ ]*.+[\r\n]+')
-        }
+        # Regular expression to match input against
+        # - If a match is made, update the label cache and store the instruction
+        # for later parsing (if present)
+        # - If no match is made, we assume the current line is an instruction
+        # and attempt to parse as such.
+        label_test = re.compile(r'(?P<label>[\w]+)[ ]*:[ ]*(?P<instruction>.*)', re.IGNORECASE)
 
         with open(self.args.in_path) as f:
             file_content = f.readlines()
@@ -404,41 +436,34 @@ class MIPSAssembler(object):
         for line in file_content:
             # Skip empty lines
             if line != '\n':
-                if regex['label'].match(line):
-                    # Hold PC constant on a label only line
-                    self.process_label(line.strip())
+                _line = line.strip()
+                match = label_test.match(_line)
 
-                elif regex['label_instruction'].match(line):
-                    self.process_label_instruction(line.strip())
-                    self.pc += 1
+                if match:
+                    # Update the label cache and/or instruction list
+                    label = match.group('label')
+                    instruction = match.group('instruction')
+                    self.label_cache.write(label, self.pc)
 
+                    if instruction:
+                        self.instructions.append(instruction)
+                        self.pc = self.pc + 1
                 else:
-                    self.process_instruction(line.strip())
-                    self.pc += 1
+                    # No match with label
+                    # If spaces exist before the newline, we can have an empty string after stripping
+                    if _line:
+                        self.instructions.append(_line)
+                        self.pc = self.pc + 1
 
-    def process_label(self, line):
-        """ Update label cache and keep instruction count constant. """
-        logging.debug('found label: {}'.format(line))
-        self.label_cache.write(line.replace(':', '').strip(), self.pc)
+        self.process_instructions()
 
-    def process_label_instruction(self, line):
-        """ Update label cache, pass instruction to encoder, increment instruction count. """
-        logging.debug('found label-instruction combination: {}'.format(line))
-        tokens = line.split(':')
-        self.label_cache.write(tokens[0].strip(), self.pc)
-        self.process_instruction(tokens[1].strip())
-
-    def process_instruction(self, instr):
-        """ Attempt to parse as an instruction using the encoder and save to the master instruction list. """
-        # encoded, label, bitstring = self.encoder.encode_instruction(self.pc, instr)
-        logging.debug('processing instruction: {}'.format(instr))
-        self.instructions.append(instr)
+    def process_instructions(self):
+        """ Encode each instruction as a bitstring, overwriting the previous, non-encoded, instruction. """
+        for index, inst in enumerate(self.instructions):
+            bitstring = self.encoder.encode_instruction(index, inst)
+            self.instructions[index] = bitstring
 
     def write(self):
-        # Check for unresolved instructions
-        if self.resolve.keys():
-            raise RuntimeError('Error: unresolved labels\n{}'.format(self.label_error()))
-
         # Write instruction memory to file
         # TODO: this can be customized using an output "formatter"
         out = open(self.args.out_path, 'w')
@@ -447,23 +472,12 @@ class MIPSAssembler(object):
 
         out.close()
 
-    def label_error(self):
-        """
-        Helper method. Pretty prints label resolution error. (No label found)
-        Format: "unresolved reference to 'label': instruction"
-        """
-        message = []
-        for key, value in self.resolve.iteritems():
-            message.append('\tunresolved reference to \'{}\': {}\n'.format(key, value[0]))
-
-        return ''.join(message)
-
 
 if __name__ == '__main__':
     assembler = MIPSAssembler()
 
     try:
         assembler.run()
-        # assembler.write()
+        assembler.write()
     except Exception, e:
         print e.message
