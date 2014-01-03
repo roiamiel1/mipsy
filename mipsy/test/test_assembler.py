@@ -2,35 +2,12 @@
 Basic tests for the assembler.
 """
 
-__license__ = """
-The MIT License (MIT)
-
-Copyright (c) 2013 Nick Miller (ngmiller@iastate.edu)
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of
-this software and associated documentation files (the "Software"), to deal in
-the Software without restriction, including without limitation the rights to
-use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
-COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-"""
-
-__author__ = 'Nick Miller, ngmiller@iastate.edu'
-__version__ = '0.0.1'
-
-
+# system imports
 import unittest
-import assembler
+
+# application imports
+from mipsy.encoder import Encoder
+from mipsy.util import LabelCache
 
 
 class ProgramTests(unittest.TestCase):
@@ -60,17 +37,17 @@ class ProgramTests(unittest.TestCase):
         """
         Tests against a bubblesort program that works for a VHDL MIPS32 implementation.
         """
-        self.run_test('testing/bubblesort_out.txt', 'testing/bubblesort_out_master.txt')
+        self.run_test('files/bubblesort_out.txt', 'files/bubblesort_out_master.txt')
 
     def test_bubblesort_labels(self):
-        self.run_test('testing/bubblesort_labels_out.txt', 'testing/bubblesort_out_master.txt')
+        self.run_test('files/bubblesort_labels_out.txt', 'files/bubblesort_out_master.txt')
 
 
 class LabelCacheTests(unittest.TestCase):
     """
     Tests basic functionality of the label cache.
     """
-    cache = assembler.LabelCache()
+    cache = LabelCache()
 
     def setUp(self):
         self.cache.empty()
@@ -109,10 +86,10 @@ class LabelCacheTests(unittest.TestCase):
     def test_data(self):
         """ Ensure data is consistant across instances. """
         # write in c1, read in c2
-        c1 = assembler.LabelCache()
+        c1 = LabelCache()
         c1.write('sort', 20)
 
-        c2 = assembler.LabelCache()
+        c2 = LabelCache()
         hit, index = c2.query('sort')
         self.assertTrue(hit)
         self.assertEqual(20, index)
@@ -134,7 +111,7 @@ class EncoderTests(unittest.TestCase):
     """
 
     error_message = 'encode value: {} for instruction: {} does not match expected: {}'
-    encoder = assembler.Encoder()
+    encoder = Encoder()
 
     def run_test(self, instr, expected, pc=0):
         """
