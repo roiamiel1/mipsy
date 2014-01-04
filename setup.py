@@ -11,7 +11,7 @@ setup(
     author_email='ngmiller@iastate.edu',
     packages=['mipsy'],
     scripts=['bin/mipsy'],
-    url='http://pypi.python.org/pypi/mipsy/',
+    url='https://github.com/ngmiller/mips-assembler',
     license='LICENSE',
     description='MIPS32 assembler.',
     install_requires=[

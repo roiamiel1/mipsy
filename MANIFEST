@@ -6,6 +6,3 @@ mipsy/__init__.py
 mipsy/arch.py
 mipsy/encoder.py
 mipsy/util.py
-mipsy/test/__init__.py
-mipsy/test/test_assembler.py
-mipsy/test/test_re.py
