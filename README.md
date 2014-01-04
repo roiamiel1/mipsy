@@ -40,6 +40,19 @@ will result in equivalent instruction memory.
 * Full assembler functionality, allowing for assembler directives and temporarily unresolved external labels.
 * All of the instructions. (At least as much as possible.)
 
+### Development
+
+I highly recommend using a virtualenv when developing for mipsy. To "install" mipsy when developing, you can run
+```
+python setup.py develop
+```
+to link the development directory to your virtualenv site-package directory.
+
+```
+python setup.py develop --uninstall
+```
+will undo those changes, but will not remove the command-line script.
+
 ### Credit
 
 * Using the [bitstring](https://code.google.com/p/python-bitstring/ "bitstring") library for decimal to binary conversion. (It was easier than writing my own 2's complement converter.)
