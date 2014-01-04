@@ -6,7 +6,7 @@ from setuptools import setup
 
 setup(
     name='mipsy',
-    version='0.1.3',
+    version='0.1.4',
     author='Nick Miller',
     author_email='ngmiller@iastate.edu',
     packages=['mipsy'],
