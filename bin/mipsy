@@ -53,8 +53,16 @@ class MIPSAssembler(object):
             file_content = f.readlines()
             f.close()
 
-        # strip surrounding whitespace and match against regex
+        # Strip comments
+        processed = []
         for line in file_content:
+            try:
+                processed.append(line[0:line.index('#')])
+            except ValueError as e:
+                processed.append(line)
+
+        # strip surrounding whitespace and match against regex
+        for line in processed:
             # Skip empty lines
             if line != '\n':
                 _line = line.strip()
