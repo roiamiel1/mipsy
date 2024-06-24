@@ -38,12 +38,11 @@ class Singleton(type):
         return kls._instances[kls]
 
 
-class LabelCache(object):
+class LabelCache(object, metaclass=Singleton):
     """
     Stores a cache of labels mapped to their instruction index.
     The cache data is shared across instances.
     """
-    __metaclass__ = Singleton
 
     def __init__(self):
         self.cache = {}
@@ -56,7 +55,7 @@ class LabelCache(object):
         """
         try:
             return True, self.cache[label]
-        except KeyError, e:
+        except KeyError as e:
             return False, 0
 
     def write(self, label, index):

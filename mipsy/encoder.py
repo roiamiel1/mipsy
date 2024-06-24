@@ -113,7 +113,7 @@ class Encoder(object):
 
         try:
             mips_op_info = MIPS.operations[operation]
-        except KeyError, e:
+        except KeyError as e:
             raise RuntimeError('Unknown operation: {}'.format(operation))
 
         # Grab the parsing info from the assembler operations table
@@ -146,7 +146,7 @@ class Encoder(object):
         branch_replace = False
         jump_replace = False
 
-        for operand, value in encoding_map.iteritems():
+        for operand, value in encoding_map.items():
             if (operand == 'rs' or operand == 'rt' or operand == 'rd'):
                 encoding_map[operand] = MIPS.registers[value]
 
