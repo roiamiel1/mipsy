@@ -109,4 +109,4 @@ if __name__ == '__main__':
         assembler.run()
         assembler.write()
     except Exception as e:
-        print(e.message)
+        print(e)
