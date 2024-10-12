@@ -5,8 +5,8 @@ mipsy setup.py
 from setuptools import setup
 
 setup(
-    name='mipsy',
-    version='0.1.5',
+    name='mipsy3',
+    version='3.0.0',
     author='Nick Miller',
     author_email='ngmiller@iastate.edu',
     packages=['mipsy'],
