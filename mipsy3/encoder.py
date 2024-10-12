@@ -9,8 +9,8 @@ See README.md for usage and general information.
 import bitstring
 
 # application imports
-from mipsy.arch import MIPS
-from mipsy.util import LabelCache, ParseInfo
+from mipsy3.arch import MIPS
+from mipsy3.util import LabelCache, ParseInfo
 
 
 class Encoder(object):

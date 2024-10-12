@@ -6,8 +6,8 @@ Basic tests for the assembler.
 import unittest
 
 # application imports
-from mipsy.encoder import Encoder
-from mipsy.util import LabelCache
+from mipsy3.encoder import Encoder
+from mipsy3.util import LabelCache
 
 
 class ProgramTests(unittest.TestCase):

@@ -6,7 +6,7 @@ See README.md for usage and general information.
 """
 
 # application imports
-from mipsy.util import OpInfo
+from mipsy3.util import OpInfo
 
 
 class MIPS(object):

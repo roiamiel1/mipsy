@@ -6,15 +6,25 @@ This is an (extremely) basic assembler for MIPS32. The end goal is to support al
 ### Install and Use
 
 You can either clone the repository and run
+
 ```
-python setup.py install
+python3 setup.py install
 ```
+
 or
+
 ```
-pip install mipsy
+pip3 install mipsy
+```
+
+or
+
+```python
+pip3 install --editable . --user
 ```
 
 To use simply run:
+
 ```
 mipsy input.asm
 ```
@@ -28,11 +38,14 @@ Labels are now supported. Either "format" is fine.
 ```
 sort: addi $s0, $s0, -20
 ```
+
 or
+
 ```
 sort:
     addi $s0, $s0, -20
 ```
+
 will result in equivalent instruction memory.
 
 ### Goals
@@ -43,14 +56,17 @@ will result in equivalent instruction memory.
 ### Development
 
 I highly recommend using a virtualenv when developing for mipsy. To "install" mipsy when developing, you can run
+
 ```
 python setup.py develop
 ```
+
 to link the development directory to your virtualenv site-package directory.
 
 ```
 python setup.py develop --uninstall
 ```
+
 will undo those changes, but will not remove the command-line script.
 
 ### Credit
