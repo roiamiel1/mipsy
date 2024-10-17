@@ -21,38 +21,6 @@ class MIPS(object):
 
     INSTRUCTION_FORMATS = ['R', 'I', 'J']
 
-    # Register name to 5-bit binary mapping
-    # e.g. $t0 -> 1000 (8)
-    registers = {
-        '$zero' : '00000', '$t0' : '01000', '$s0' : '10000', '$t8' : '11000',
-        '$at'   : '00001', '$t1' : '01001', '$s1' : '10001', '$t9' : '11001',
-        '$v0'   : '00010', '$t2' : '01010', '$s2' : '10010', '$k0' : '11010',
-        '$v1'   : '00011', '$t3' : '01011', '$s3' : '10011', '$k1' : '11011',
-        '$a0'   : '00100', '$t4' : '01100', '$s4' : '10100', '$gp' : '11100',
-        '$a1'   : '00101', '$t5' : '01101', '$s5' : '10101', '$sp' : '11101',
-        '$a2'   : '00110', '$t6' : '01110', '$s6' : '10110', '$fp' : '11110',
-        '$a3'   : '00111', '$t7' : '01111', '$s7' : '10111', '$ra' : '11111',
-    }
-
-    # Instruction to opcode mapping
-    # Value is dictionary with instruction attribute access (instruction format, opcode, funct code (if applicable))
-    operations = {
-        'nop'   : OpInfo('R', '000000', '000000'),
-        'add'   : OpInfo('R', '000000', '100000'),
-        'addi'  : OpInfo('I', '001000', None),
-        'and'   : OpInfo('R', '000000', '100100'),
-        'beq'   : OpInfo('I', '000100', None),
-        'j'     : OpInfo('J', '000010', None),
-        'jal'   : OpInfo('J', '000011', None),
-        'jr'    : OpInfo('R', '000000', '001000'),
-        'lw'    : OpInfo('I', '100011', '100011'),
-        'or'    : OpInfo('R', '000000', '100101'),
-        'slt'   : OpInfo('R', '000000', '101010'),
-        'sll'   : OpInfo('R', '000000', '000000'),
-        'sw'    : OpInfo('I', '101011', None),
-        'sub'   : OpInfo('R', '000000', '100010'),
-    }
-
     class Instruction(object):
         """
         An instruction defines an encoding and a default operand map.

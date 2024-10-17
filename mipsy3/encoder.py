@@ -6,200 +6,206 @@ See README.md for usage and general information.
 """
 
 # system imports
+import re
+import bitstruct
 import bitstring
+from dataclasses import dataclass
+from enum import Enum, EnumMeta
+from typing import List, Optional
 
-# application imports
 from mipsy3.arch import MIPS
-from mipsy3.util import LabelCache, ParseInfo
+
+
+class DirectValueMeta(EnumMeta):
+    "Metaclass that allows for directly getting an enum attribute"
+    def __getattribute__(cls, name):
+        value = super().__getattribute__(name)
+        if isinstance(value, cls):
+            value = value.value
+        return value
+
+
+class Opcode(Enum, metaclass=DirectValueMeta):
+    NOP = "nop"
+    ADD = "add"
+    ADDI = "addi"
+    AND = "and"
+    BEQ = "beq"
+    J = "j"
+    JAL = "jal"
+    JR = "jr"
+    LW = "lw"
+    OR = "or"
+    SLT = "slt"
+    SLL = "sll"
+    SW = "sw"
+    SUB = "sub"
+
+
+class OpArg(Enum, metaclass=DirectValueMeta):
+    RD = "rd"
+    RS = "rs"
+    RT = "rt"
+    IMM = "imm"
+    SHAMT = "shamt"
+    LABEL = "label"
+
+
+class OpFormat(Enum, metaclass=DirectValueMeta):
+    R = "R" # Registers
+    I = "I" # Immediate
+    J = "J" # Jump
+
+
+class Regs(Enum, metaclass=DirectValueMeta):
+    ZERO = "$zero"
+    AT = "$at"
+    V0 = "$v0"
+    V1 = "$v1"
+    A0 = "$a0"
+    A1 = "$a1"
+    A2 = "$a2"
+    A3 = "$a3"
+    T0 = "$t0"
+    T1 = "$t1"
+    T2 = "$t2"
+    T3 = "$t3"
+    T4 = "$t4"
+    T5 = "$t5"
+    T6 = "$t6"
+    T7 = "$t7"
+    S0 = "$s0"
+    S1 = "$s1"
+    S2 = "$s2"
+    S3 = "$s3"
+    S4 = "$s4"
+    S5 = "$s5"
+    S6 = "$s6"
+    S7 = "$s7"
+    T8 = "$t8"
+    T9 = "$t9"
+    K0 = "$k0"
+    K1 = "$k1"
+    GP = "$gp"
+    SP = "$sp"
+    FP = "$fp"
+    RA = "$ra"
+
+
+@dataclass
+class OpInfo(object):
+    format: OpFormat
+    opcode_code: int
+    funct_code: Optional[int]
+    args: List[OpArg]
+
+class LabelIndex(object):
+    def __init__(self):
+        self._label_to_index = {}
+
+    def __getitem__(self, key, default_value=None):
+        return self._label_to_index.get(key, default=default_value)
+
+    def __setitem__(self, key, value):
+        assert key not in self._label_to_index, f"Key: `{key}` already exists"
+        self._label_to_index[key] = value
+
+    def clear(self):
+        self._label_to_index.clear()
 
 
 class Encoder(object):
-    """
-    Responsible for encoding individual instructions and querying the label cache.
-    """
+    _INST_TEST = re.compile(r"( *)(?P<opcode>\w*)( *)(?P<args>[A-Za-z0-9 ,\[\]\+]*)", re.IGNORECASE)
 
-    class tokenizer(object):
-        """
-        Defines a 'list' of tokenizing functions used for varying instructions.
-        Each 'tokenizer' returns a dictionary mapping the specified operands to their tokens
-        from the instruction data (the portion of the instruction following the operation)
-
-        instruction = (operation) (instruction_data) <-- here, we're only concerned with instruction_data
-        """
-        def map_operands(self, to_split, operands):
-            """
-            Helper method.
-            Maps operands to the preprocessed instruction data string.
-            """
-            operand_values = to_split.split()
-
-            if len(operands) != len(operand_values):
-                raise RuntimeError('instruction contains too many operands')
-
-            operand_map = {}
-            for i in range(len(operands)):
-                operand_map[operands[i]] = operand_values[i]
-
-            return operand_map
-
-        def RI_type(self, operands, instruction_data):
-            """
-            The RI_type tokenizer takes instructions with the format:
-            (operation) [(operand1), (operand2), (operand3)]
-            """
-            to_split = instruction_data.replace(',', ' ')
-            return self.map_operands(to_split, operands)
-
-        def J_type(self, operands, instruction_data):
-            """
-            The J_type tokenizer takes jump (j, jal, jr) instructions
-            with the format:
-            (operation) [operand]
-            """
-            return self.map_operands(instruction_data, operands)
-
-        def load_store(self, operands, instruction_data):
-            """
-            The load_store tokenizer takes instructions with the format:
-            (operation) [operand1, (operand2)(operand3)]
-            """
-            # Clear out commas and the parenthesis surrounding the base register
-            to_split = instruction_data.replace(',', ' ').replace('(', ' ').replace(')', ' ')
-            return self.map_operands(to_split, operands)
-
-        def nop(self, operands, instruction_data):
-            """
-            The nop tokenizer simply maps all the given operands to register $zero.
-            """
-            return {operand: '$zero' for operand in operands}
-
-    # The assembler operation table defines the parsing rules
-    # for a given instruction. The parsing rules are used to
-    # map tokens in the instruction string to register address
-    # and immediate value positions. (rs, rt, rd, etc)
-    t = tokenizer()
-    operations = {
-        'nop'   : ParseInfo(['rd', 'rs', 'rt'],  t.nop),
-        'add'   : ParseInfo(['rd', 'rs', 'rt'],  t.RI_type),
-        'addi'  : ParseInfo(['rt', 'rs', 'imm'], t.RI_type),
-        'and'   : ParseInfo(['rd', 'rs', 'rt'],  t.RI_type),
-        'beq'   : ParseInfo(['rs', 'rt', 'label'], t.RI_type),
-        'j'     : ParseInfo(['label'],            t.J_type),
-        'jal'   : ParseInfo(['label'],            t.J_type),
-        'jr'    : ParseInfo(['rs'],              t.RI_type),
-        'lw'    : ParseInfo(['rt', 'imm', 'rs'], t.load_store),
-        'or'    : ParseInfo(['rd', 'rs', 'rt'],  t.RI_type),
-        'slt'   : ParseInfo(['rd', 'rs', 'rt'],  t.RI_type),
-        'sll'   : ParseInfo(['rd', 'rt', 'shamt'], t.RI_type),
-        'sw'    : ParseInfo(['rt', 'imm', 'rs'], t.load_store),
-        'sub'   : ParseInfo(['rd', 'rs', 'rt'],  t.RI_type),
-        # TODO ...
+    _FORMAT_TO_STRUCT = {
+        OpFormat.R: ">u6u5u5u5u5u6",
+        OpFormat.I: ">u6u5u5s16",
+        OpFormat.J: ">u6s26",
     }
 
-    def __init__(self):
-        # ISA definitions
-        self.mips = MIPS()
+    _FORMAT_TO_OP_ARGS = {
+        OpFormat.R: [OpArg.RS, OpArg.RT, OpArg.RD, OpArg.SHAMT],
+        OpFormat.I: [OpArg.RS, OpArg.RT, OpArg.IMM],
+        OpFormat.J: [OpArg.LABEL],
+    }
 
-        # Label resolution cache
-        self.label_cache = LabelCache()
+    _OPCODES_TO_OP_INFO = {
+        Opcode.NOP:  OpInfo(OpFormat.R, 0x00, 0x00, [OpArg.RD, OpArg.RS, OpArg.RT]),
+        Opcode.ADD:  OpInfo(OpFormat.R, 0x00, 0x20, [OpArg.RD, OpArg.RS, OpArg.RT]),
+        Opcode.ADDI: OpInfo(OpFormat.I, 0x08, None, [OpArg.RT, OpArg.RS, OpArg.IMM]),
+        Opcode.AND:  OpInfo(OpFormat.R, 0x00, 0x24, [OpArg.RD, OpArg.RS, OpArg.RT]),
+        Opcode.BEQ:  OpInfo(OpFormat.I, 0x04, None, [OpArg.RS, OpArg.RT, OpArg.LABEL]),
+        Opcode.J:    OpInfo(OpFormat.J, 0x02, None, [OpArg.LABEL]),
+        Opcode.JAL:  OpInfo(OpFormat.J, 0x03, None, [OpArg.LABEL]),
+        Opcode.JR:   OpInfo(OpFormat.R, 0x00, 0x08, [OpArg.RS]),
+        Opcode.LW:   OpInfo(OpFormat.I, 0x23, None, [OpArg.RT, OpArg.IMM, OpArg.RS]),
+        Opcode.OR:   OpInfo(OpFormat.R, 0x00, 0x25, [OpArg.RD, OpArg.RS, OpArg.RT]),
+        Opcode.SLT:  OpInfo(OpFormat.R, 0x00, 0x2a, [OpArg.RD, OpArg.RS, OpArg.RT]),
+        Opcode.SLL:  OpInfo(OpFormat.R, 0x00, 0x00, [OpArg.RD, OpArg.RT, OpArg.SHAMT]),
+        Opcode.SW:   OpInfo(OpFormat.I, 0x2b, None, [OpArg.RT, OpArg.IMM, OpArg.RS]),
+        Opcode.SUB:  OpInfo(OpFormat.R, 0x00, 0x22, [OpArg.RD, OpArg.RS, OpArg.RT]),
+    }
 
-    def encode_instruction(self, pc, instr):
-        """
-        Given an instruction string, generate the encoded bit string.
-        PC (instruction index is used for branch label resolution)
-        """
-        data = instr.split()
-        operation = data[0]
+    _REGS_TO_CODE = {
+        Regs.ZERO: 0, 
+        Regs.AT: 1,
+        Regs.V0: 2,
+        Regs.V1: 3,
+        Regs.A0: 4,
+        Regs.A1: 5,
+        Regs.A2: 6,
+        Regs.A3: 7,
+        Regs.T0: 8,
+        Regs.T1: 9,
+        Regs.T2: 10,
+        Regs.T3: 11,
+        Regs.T4: 12,
+        Regs.T5: 13,
+        Regs.T6: 14,
+        Regs.T7: 15,
+        Regs.S0: 16,
+        Regs.S1: 17,
+        Regs.S2: 18,
+        Regs.S3: 19,
+        Regs.S4: 20,
+        Regs.S5: 21,
+        Regs.S6: 22,
+        Regs.S7: 23,
+        Regs.T8: 24,
+        Regs.T9: 25,
+        Regs.K0: 26,
+        Regs.K1: 27,
+        Regs.GP: 28,
+        Regs.SP: 29,
+        Regs.FP: 30,
+        Regs.RA: 31
+    }
 
-        try:
-            mips_op_info = MIPS.operations[operation]
-        except KeyError as e:
-            raise RuntimeError('Unknown operation: {}'.format(operation))
+    def encode_instruction(self, pc, inst, label_index: LabelIndex):
+        match = Encoder._INST_TEST.match(inst)
 
-        # Grab the parsing info from the assembler operations table
-        # Generate the initial operand map using the specified tokenizer
-        parse_info = self.operations[operation]
-        encoding_map = parse_info.tokenizer(parse_info.tokens, ''.join(data[1:]))
+        if not match:
+            return
 
-        # Get the binary equivalents of the operands and MIPS operation information
-        self.resolve_operands(encoding_map, operation, pc)
+        opcode = match.group('opcode').lower().strip() 
+        args = list(filter([x.strip() for x in match.group('args').replace(",", " ").split()]))
 
-        # Pull MIPS operation info into encoding map
-        self.resolve_operation_info(encoding_map, mips_op_info)
+        assert opcode in Encoder._OPCODES_TO_OP_INFO, f"Unknown opcode: {opcode}"
+        opinfo = Encoder._OPCODES_TO_OP_INFO[opcode]
+        
+        assert len(opinfo.args) == len(args), "Args count unmatch requeird"
+        args_values = dict(zip(opinfo.args, args))
 
-        instruction = self.mips.generate_instruction(mips_op_info.format)
-        return instruction.encode(encoding_map)
+        # TODO: translate registers to numbers
 
-    def resolve_operation_info(self, encoding_map, mips_op_info):
-        """
-        Adds the predefined operation info (opcode, funct) to the current encoding map.
-        """
-        encoding_map['opcode'] = mips_op_info.opcode
-        encoding_map['funct'] = mips_op_info.funct
+        encoding_values = [opinfo.opcode_code]
+        for op_arg in Encoder._FORMAT_TO_OP_ARGS[opinfo.format]:
+            if op_arg == OpArg.LABEL:
+                encoding_values.append(label_index[args_values[OpArg.LABEL]])
+            else:
+                encoding_values.append(args_values.get(op_arg, 0))
 
-    def resolve_operands(self, encoding_map, operation, pc):
-        """
-        Converts generic register references (such as $t0, $t1, etc), immediate values, and jump addresses
-        to their binary equivalents.
-        """
-        convert = Encoder.to_binary
-        branch_replace = False
-        jump_replace = False
+        if opinfo.format == OpFormat.R:
+            encoding_values.append(opinfo.funct_code or 0)
 
-        for operand, value in encoding_map.items():
-            if (operand == 'rs' or operand == 'rt' or operand == 'rd'):
-                encoding_map[operand] = MIPS.registers[value]
-
-            elif (operand == 'imm'):
-                encoding_map[operand] = convert(int(value), MIPS.IMMEDIATE_SIZE)
-
-            elif (operand == 'addr'):
-                encoding_map[operand] = convert(int(value), MIPS.ADDRESS_SIZE)
-
-            elif (operand == 'shamt'):
-                encoding_map[operand] = convert(int(value), MIPS.SHAMT_SIZE)
-
-            elif (operand == 'label'):
-                label = encoding_map[operand]
-                hit, index = self.label_cache.query(label)
-
-                if not hit:
-                    raise RuntimeError('No address found for label: {}'.format(label))
-
-                if ((operation == 'beq') or (operation == 'bne')):
-                    # Calculate the relative instruction offset. The MIPS ISA uses
-                    # PC + 4 + (branch offset) to resolve branch targets.
-                    if index > pc:
-                        encoding_map[operand] = convert(index - pc - 1, MIPS.IMMEDIATE_SIZE)
-                    elif index < pc:
-                        encoding_map[operand] = convert((pc + 1) - index, MIPS.IMMEDIATE_SIZE)
-                    else:
-                        # Not sure why a branch would resolve to itself, but ok
-                        # (PC + 4) - 4 = 
-                        encoding_map[operand] = convert(-1, MIPS.IMMEDIATE_SIZE)
-
-                    branch_replace = True
-
-                elif ((operation == 'j') or (operation == 'jal')):
-                    # Jump addresses are absolute
-                    encoding_map[operand] = convert(index, MIPS.ADDRESS_SIZE)
-                    jump_replace = True
-
-        # Need to convert references to 'label' back to references the instruction
-        # encoding string recognizes, otherwise we end up with the default value (zero)
-        # This doesn't feel very clean, but working on a fix.
-        if branch_replace:
-            encoding_map['imm'] = encoding_map['label']
-        elif jump_replace:
-            encoding_map['addr'] = encoding_map['label']
-
-    @staticmethod
-    def to_binary(decimal, length):
-        """
-        Given a decimal, generate the binary equivalent string of
-        given length.
-        e.g. binary(2, 5) = 00010
-        """
-        b = bitstring.Bits(int=decimal, length=length)
-        return b.bin
-
+        return bitstruct.pack(Encoder._FORMAT_TO_STRUCT[opinfo.format], *encoding_values)
